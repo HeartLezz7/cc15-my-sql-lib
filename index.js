@@ -1,4 +1,7 @@
+require("dotenv").config();
 const mysql = require("mysql2/promise");
+const express = require("express");
+const app = express();
 
 async function run() {
   try {
@@ -118,6 +121,7 @@ async function createTodo(title, completed, userId) {
     const insert =
       "INSERT INTO todos (title, completed,user_id) VALUES (?,?,?)";
     const getTodo = await pool.query(insert, [title, completed, userId]);
+    return getTodo;
   } catch (error) {
     console.log(error);
   }
@@ -127,7 +131,8 @@ async function createTodo(title, completed, userId) {
 async function updateUser(password, id) {
   try {
     const update = "UPDATE users SET password=? WHERE id =?";
-    const UpdateUser = await pool.query(update, [password, id]);
+    const updateUser = await pool.query(update, [password, id]);
+    return updateUser;
   } catch (error) {
     console.log(error);
   }
@@ -148,19 +153,23 @@ async function deleteRow(table, id) {
   try {
     const del = "DELETE FROM " + table + " WHERE id =?";
     const getUser = await pool.query(del, [id]);
-    console.log(getUser);
   } catch (error) {
     console.log(error);
   }
 }
 
 // SEARCH
-async function search(table, id) {
+async function searchRow(table, id) {
   try {
-    const sql = "SELECT * FROM " + table + " WHERE id = " + id;
-    const searchId = await pool.query(sql);
-    console.log(searchId[0]);
-    console.log(sql);
+    if (table === "users") {
+      const sql = "SELECT * FROM users WHERE id = " + id;
+      const searchUser = await pool.query(sql);
+      return searchUser;
+    } else if (table === "todos") {
+      const sql = "SELECT * FROM todos WHERE user_id = " + id;
+      const searchTodo = await pool.query(sql);
+      return searchTodo;
+    }
   } catch (error) {
     console.log(error);
   }
@@ -171,8 +180,8 @@ async function getDatabase(table) {
   try {
     const sql = "SELECT * FROM " + table;
     const result = await pool.query(sql);
-    console.log(result[0]);
-    console.log(sql);
+    return result;
+    return result;
   } catch (error) {
     console.log(error);
   }
@@ -182,8 +191,62 @@ async function getDatabase(table) {
 // createTodo("run", "0", "13");
 // updateUser("heartzzz", "234123", 7);
 // updateTodo("run", 1, 1, 1);
-// deleteUser(7);
-// deleteTodo(1);
 // deleteRow("todos", 6);
 // getDatabase("todos");
-// search("todos", 3);
+// searchRow("todos", 3);
+
+// ################
+// LAB02
+app.get("/", (req, res) => {
+  res.json({ msg: "hello" });
+});
+
+app.post("/register", async (req, res) => {
+  let { username, password } = req.query;
+  await createUser(username, password);
+  let result = await getDatabase("users");
+  console.log(result);
+  res.json(result[0]);
+});
+
+app.get("/login", async (req, res) => {
+  let { username, password } = req.query;
+  const sql = "SELECT * FROM users WHERE username = ? AND password = ? ";
+  const searchUser = await pool.query(sql, [username, password]);
+  res.json(searchUser[0]);
+});
+
+app.patch("/password", async (req, res) => {
+  let { password, id } = req.query;
+  await updateUser(password, id);
+  const sql = "SELECT * FROM users WHERE id = " + id;
+  const result = await pool.query(sql);
+  res.json(result[0]);
+});
+
+app.post("/todos", async (req, res) => {
+  let { title, completed, user_id } = req.query;
+  const sql = "SELECT * FROM todos WHERE user_id = " + user_id;
+  await createTodo(title, completed, user_id);
+  const result = await pool.query(sql);
+  res.json(result[0]);
+});
+
+app.get("/todos/:id", async (req, res) => {
+  const { id } = req.params;
+  const sql = "SELECT * FROM todos WHERE id = " + id;
+  const result = await pool.query(sql);
+  res.json(result[0]);
+});
+
+app.delete("/todos/:id", async (req, res) => {
+  const { id } = req.params;
+  const del = "DELETE FROM todos WHERE id = " + id;
+  const deleteTodo = await pool.query(del);
+  const getData = await getDatabase("todos");
+  console.log(getData);
+  res.json(getData[0]);
+});
+
+const port = process.env.PORT || 8000;
+app.listen(port, () => console.log("Server on", port));
