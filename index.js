@@ -96,7 +96,6 @@ async function run() {
 //   .catch((err) => console.log(err));
 
 // LAB01
-
 const pool = mysql.createPool({
   host: "localhost",
   user: "root",
@@ -128,10 +127,10 @@ async function createTodo(title, completed, userId) {
 }
 
 // UPDATE
-async function updateUser(password, id) {
+async function updateUser(username, password) {
   try {
-    const update = "UPDATE users SET password=? WHERE id =?";
-    const updateUser = await pool.query(update, [password, id]);
+    const update = "UPDATE users SET password=? WHERE username =?";
+    const updateUser = await pool.query(update, [password, username]);
     return updateUser;
   } catch (error) {
     console.log(error);
@@ -152,7 +151,7 @@ async function updateTodo(title, completed, userId) {
 async function deleteRow(table, id) {
   try {
     const del = "DELETE FROM " + table + " WHERE id =?";
-    const getUser = await pool.query(del, [id]);
+    await pool.query(del, [id]);
   } catch (error) {
     console.log(error);
   }
@@ -181,7 +180,6 @@ async function getDatabase(table) {
     const sql = "SELECT * FROM " + table;
     const result = await pool.query(sql);
     return result;
-    return result;
   } catch (error) {
     console.log(error);
   }
@@ -197,55 +195,91 @@ async function getDatabase(table) {
 
 // ################
 // LAB02
-app.get("/", (req, res) => {
-  res.json({ msg: "hello" });
-});
 
+app.use(express.json());
 app.post("/register", async (req, res) => {
-  let { username, password } = req.query;
-  await createUser(username, password);
-  let result = await getDatabase("users");
-  console.log(result);
-  res.json(result[0]);
+  try {
+    const { username, password } = req.body;
+    console.log(username, password);
+    const checkUser = await pool.query(
+      "SELECT * FROM users WHERE username = ?",
+      [username]
+    );
+    console.log(checkUser);
+    if (checkUser[0].length !== 0) {
+      return res.status(400).json({ message: "already use username" });
+    }
+    await createUser(username, password);
+    res.json({ message: "register success" });
+  } catch (error) {
+    res.status(500).json({ message: "Error" });
+  }
 });
 
-app.get("/login", async (req, res) => {
-  let { username, password } = req.query;
-  const sql = "SELECT * FROM users WHERE username = ? AND password = ? ";
-  const searchUser = await pool.query(sql, [username, password]);
-  res.json(searchUser[0]);
+app.post("/login", async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    const getUser = await pool.query(
+      "SELECT * FROM users WHERE username = ? AND password = ? ",
+      [username, password]
+    );
+    if (getUser[0].length === 0) {
+      return res.status(400).json({ message: "invalid username or password" });
+    }
+    res.status(200).json({ message: "login success" });
+  } catch (error) {
+    res.status(500).json({ message: "internal server error" });
+  }
 });
 
 app.patch("/password", async (req, res) => {
-  let { password, id } = req.query;
-  await updateUser(password, id);
-  const sql = "SELECT * FROM users WHERE id = " + id;
-  const result = await pool.query(sql);
-  res.json(result[0]);
+  const { username, password } = req.body;
+  const checkUser = await pool.query(
+    "SELECT * FROM users WHERE username = ? ",
+    [username]
+  );
+  if (checkUser[0].length === 0) {
+    return res.status(400).json({ message: "Not found user" });
+  }
+  await updateUser(username, password);
+  res.json({ message: "change password" });
 });
 
 app.post("/todos", async (req, res) => {
-  let { title, completed, user_id } = req.query;
-  const sql = "SELECT * FROM todos WHERE user_id = " + user_id;
-  await createTodo(title, completed, user_id);
-  const result = await pool.query(sql);
-  res.json(result[0]);
+  try {
+    const { title, completed, user_id } = req.body;
+    const checkUser = await pool.query(
+      "SELECT * FROM todos WHERE user_id = ? ",
+      [user_id]
+    );
+    console.log(checkUser);
+    if (checkUser[0].length === 0) {
+      return res.status(400).json({ message: "Not found user" });
+    }
+    await createTodo(title, completed, user_id);
+    res.json({ message: "Create todolist" });
+  } catch (error) {
+    res.status(500).json({ message: "internal server error" });
+  }
 });
 
 app.get("/todos/:id", async (req, res) => {
   const { id } = req.params;
-  const sql = "SELECT * FROM todos WHERE id = " + id;
-  const result = await pool.query(sql);
-  res.json(result[0]);
+  const checkID = await pool.query("SELECT * FROM todos WHERE id = ?", [id]);
+  if (checkID[0].length === 0) {
+    return res.status(400).json({ message: "Not found todolist" });
+  }
+  res.status(200).json(checkID[0]);
 });
 
 app.delete("/todos/:id", async (req, res) => {
   const { id } = req.params;
-  const del = "DELETE FROM todos WHERE id = " + id;
-  const deleteTodo = await pool.query(del);
-  const getData = await getDatabase("todos");
-  console.log(getData);
-  res.json(getData[0]);
+  const getData = await pool.query("SELECT * FROM todos WHERE id = ?", [id]);
+  if (getData[0].length === 0) {
+    return res.status(400).json({ message: "Not found todolist" });
+  }
+  await deleteRow("todos", id);
+  res.json({ message: "DELTE successful" });
 });
 
 const port = process.env.PORT || 8000;
